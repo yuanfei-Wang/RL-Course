@@ -37,8 +37,11 @@ class Env2048(gym.Env):
         self.board = self.game.get_state()
         return np.log2(np.where(self.board>0, self.board, 1)).flatten()
 
-    def render(self):
-        return self.game.get_state()
+    def get_state(self):
+        return self._get_obs()
+
+    def render(self, mode='human'):
+        return np.array(self.game.get_state()).reshape((4,4))
 
 # gym.envs.register(
 #      id='Env2048',
