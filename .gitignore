@@ -1,1 +1,3 @@
 *.pyc
+DQN_log
+*.log
