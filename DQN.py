@@ -148,6 +148,7 @@ def main():
                 if done:
                     print("episode: {} , the episode reward is {}".format(i, round(ep_reward, 3)))
                     writer.add_scalar('Reward/Episodes reward', ep_reward, global_step=i)
+                    writer.add_scalar('Reward/Score', env.get_score(), global_step=i)
             if done:
                 break
             state = next_state

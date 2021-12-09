@@ -40,8 +40,11 @@ class Env2048(gym.Env):
     def get_state(self):
         return self._get_obs()
 
+    def get_score(self):
+        return self.game.score
+
     def render(self, mode='human'):
-        return str(np.array(self.game.get_state()).reshape((4,4))) + '\n' + str(self.game.clear_score)
+        return str(np.array(self.game.get_state()).reshape((4,4))) + '\n' + str(self.game.score)
 
 class Env2048soft(gym.Env):
 
@@ -80,8 +83,11 @@ class Env2048soft(gym.Env):
     def get_state(self):
         return self._get_obs()
 
+    def get_score(self):
+        return self.game.score
+
     def render(self, mode='human'):
-        return str(np.array(self.game.get_state()).reshape((4,4))) + '\n' + str(self.game.clear_score)
+        return str(np.array(self.game.get_state()).reshape((4,4))) + '\n' + str(self.game.score)
 
 def make_onehot(a):
     return (np.arange(18)==a[:,None]).astype(np.int).astype(np.float)
@@ -123,8 +129,11 @@ class Env2048onehot(gym.Env):
     def get_state(self):
         return self._get_obs()
 
+    def get_score(self):
+        return self.game.score
+
     def render(self, mode='human'):
-        return str(np.array(self.game.get_state()).reshape((4,4))) + '\n' + str(self.game.clear_score)
+        return str(np.array(self.game.get_state()).reshape((4,4))) + '\n' + str(self.game.score)
 
 # gym.envs.register(
 #      id='Env2048',
