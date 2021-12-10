@@ -7,10 +7,11 @@ import gym
 import matplotlib.pyplot as plt
 import copy
 from tensorboardX import SummaryWriter
+import os
 
 # hyper-parameters
-BATCH_SIZE = 128
-LR = 0.001
+BATCH_SIZE = 128 # 128 originally
+LR = 0.001 # 0.001 originally
 GAMMA = 0.90
 EPISILO = 0.9
 MEMORY_CAPACITY = 200000
@@ -19,9 +20,11 @@ Q_NETWORK_ITERATION = 100
 use_cuda = torch.cuda.is_available()
 # use_cuda = False
 
+torch.cuda.set_device(1)
+
 # env = gym.make("CartPole-v0")
 # setting_name = ''
-setting_name = 'EmbNet'
+setting_name = 'RowColNet'
 env = gym.make("Env2048onehot-v0")
 env = env.unwrapped
 writer = SummaryWriter('DQN_log/onehot/')
@@ -29,7 +32,7 @@ NUM_ACTIONS = env.action_space.n
 NUM_STATES = env.observation_space.shape[0]
 ENV_A_SHAPE = 0 if isinstance(env.action_space.sample(), int) else env.action_space.sample.shape
 
-print(setting_name)
+print(setting_name, os.getpid())
 print('bsz', BATCH_SIZE)
 print('lr', LR)
 print('gamma', GAMMA)
@@ -101,12 +104,38 @@ class CNNNet(nn.Module):
         action_prob = self.out(x)
         return action_prob.softmax(dim=-1)
 
+class RowColNet(nn.Module):
+    """docstring for Net"""
+    def __init__(self):
+        super(RowColNet, self).__init__()
+        # self.fc1 = nn.Linear(18, 64)
+        # self.fc1.weight.data.normal_(0,0.1)
+        self.rowemb = nn.Linear(18*4, 64)
+        self.rowemb.weight.data.normal_(0,0.1)
+        self.colemb = nn.Linear(18*4, 64)
+        self.colemb.weight.data.normal_(0,0.1)
+        self.fc2 = nn.Linear(8*64, 64)
+        self.fc2.weight.data.normal_(0,0.1)
+        self.out = nn.Linear(64,NUM_ACTIONS)
+        self.out.weight.data.normal_(0,0.1)
+
+    def forward(self,x):
+        x = x.view(-1, 4, 4, 18)
+        x1 = self.rowemb(x.view(-1, 4, 4*18))
+        x2 = self.colemb(x.permute(0,2,1,3).reshape(-1, 4, 4*18))
+        x = torch.cat([x1, x2], dim=-1).reshape(-1, 8*64)
+        x = F.relu(x)
+        x = self.fc2(x)
+        x = F.relu(x)
+        action_prob = self.out(x)
+        return action_prob.softmax(dim=-1)
+
 class DQN():
     """docstring for DQN"""
     def __init__(self):
         super(DQN, self).__init__()
         # self.eval_net, self.target_net = Net(), Net()
-        self.eval_net, self.target_net = EmbNet(), EmbNet()
+        self.eval_net, self.target_net = RowColNet(), RowColNet()
         for n, p in self.eval_net.named_parameters():
             print(n, p.size())
         print('Net built')
