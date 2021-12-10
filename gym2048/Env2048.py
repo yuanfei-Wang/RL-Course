@@ -43,6 +43,9 @@ class Env2048(gym.Env):
     def get_score(self):
         return self.game.score
 
+    def get_board(self):
+        return np.array(self.game.get_state())
+
     def render(self, mode='human'):
         return str(np.array(self.game.get_state()).reshape((4,4))) + '\n' + str(self.game.score)
 
@@ -82,6 +85,9 @@ class Env2048soft(gym.Env):
 
     def get_state(self):
         return self._get_obs()
+
+    def get_board(self):
+        return np.array(self.game.get_state())
 
     def get_score(self):
         return self.game.score
@@ -128,6 +134,9 @@ class Env2048onehot(gym.Env):
 
     def get_state(self):
         return self._get_obs()
+
+    def get_board(self):
+        return np.array(self.game.get_state())
 
     def get_score(self):
         return self.game.score
