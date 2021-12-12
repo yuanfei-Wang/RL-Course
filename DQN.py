@@ -10,12 +10,13 @@ from tensorboardX import SummaryWriter
 import os
 
 # hyper-parameters
-BATCH_SIZE = 128 # 128 originally
+BATCH_SIZE = 1024 # 128 originally
 LR = 0.001 # 0.001 originally
-GAMMA = 0.90
+GAMMA = 0.99 # 0.9 originally
 EPISILO = 0.9
-MEMORY_CAPACITY = 200000
+MEMORY_CAPACITY = 20000 # 2e+5 originally
 Q_NETWORK_ITERATION = 100
+EPISODES = 40000 # 4e+4 originally
 
 use_cuda = torch.cuda.is_available()
 # use_cuda = False
@@ -24,7 +25,7 @@ torch.cuda.set_device(1)
 
 # env = gym.make("CartPole-v0")
 # setting_name = ''
-setting_name = 'RowColNet'
+setting_name = 'CNNNet-mem2w-gamma0.99'
 env = gym.make("Env2048onehot-v0")
 env = env.unwrapped
 writer = SummaryWriter('DQN_log/onehot/')
@@ -130,12 +131,49 @@ class RowColNet(nn.Module):
         action_prob = self.out(x)
         return action_prob.softmax(dim=-1)
 
+class RCCNet(nn.Module):
+    """docstring for Net"""
+    def __init__(self):
+        super(RCCNet, self).__init__()
+        # self.fc1 = nn.Linear(18, 64)
+        # self.fc1.weight.data.normal_(0,0.1)
+        self.rowemb = nn.Linear(18*4, 64)
+        self.rowemb.weight.data.normal_(0,0.1)
+        self.colemb = nn.Linear(18*4, 64)
+        self.colemb.weight.data.normal_(0,0.1)
+        self.fc1 = nn.Linear(18, 64)
+        self.fc1.weight.data.normal_(0,0.1)
+        self.conv = nn.Conv2d(64,64,3,padding=(1,1))
+        self.fc2 = nn.Linear(24*64, 128)
+        self.fc2.weight.data.normal_(0,0.1)
+        self.out = nn.Linear(128,NUM_ACTIONS)
+        self.out.weight.data.normal_(0,0.1)
+
+    def forward(self,x):
+        x = x.view(-1, 4, 4, 18)
+        # == RowCol
+        x1 = self.rowemb(x.view(-1, 4, 4*18))
+        x2 = self.colemb(x.permute(0,2,1,3).reshape(-1, 4, 4*18))
+        # === CNN
+        x = self.fc1(x)
+        x = F.relu(x)
+        x = x.permute(0, 3, 1, 2)
+        x = self.conv(x).permute(0,2,3,1).view(-1, 16*64)
+
+        x1 = torch.cat([x1, x2], dim=-1).reshape(-1, 8*64)
+        x = torch.cat([x1, x], dim=-1)
+        x = F.relu(x)
+        x = self.fc2(x)
+        x = F.relu(x)
+        action_prob = self.out(x)
+        return action_prob.softmax(dim=-1)
+
 class DQN():
     """docstring for DQN"""
     def __init__(self):
         super(DQN, self).__init__()
         # self.eval_net, self.target_net = Net(), Net()
-        self.eval_net, self.target_net = RowColNet(), RowColNet()
+        self.eval_net, self.target_net = CNNNet(), CNNNet()
         for n, p in self.eval_net.named_parameters():
             print(n, p.size())
         print('Net built')
@@ -158,11 +196,14 @@ class DQN():
         self.loss_func = nn.MSELoss()
         print('optim built')
 
-    def choose_action(self, state):
+    def save(self, path):
+        torch.save(self.eval_net.state_dict(), path)
+
+    def choose_action(self, state, greedy=False):
         state = torch.unsqueeze(torch.FloatTensor(state), 0) # get a 1D array
         if use_cuda:
             state = state.cuda()
-        if np.random.randn() <= EPISILO:# greedy policy
+        if greedy or np.random.randn() <= EPISILO:# greedy policy
             action_value = self.eval_net.forward(state)
             if use_cuda:
                 action_value = action_value.cpu()
@@ -214,6 +255,19 @@ class DQN():
         loss.backward()
         self.optimizer.step()
 
+    def greedy_eval(self, env):
+        state = env.reset()
+        while True:
+            env.render()
+            action = self.choose_action(state, greedy=True)
+            # print(action, end='')
+            next_state, reward, done, info = env.step(action)
+            # np.sum(np.abs(next_board - self.board)) == 0
+            if done or np.sum(np.abs(next_state - state)) == 0:
+                # print('\n')
+                return env.get_score(), np.log2(env.get_board().max())
+            state = next_state
+
 # def reward_func(env, x, x_dot, theta, theta_dot):
 #     r1 = (env.x_threshold - abs(x))/env.x_threshold - 0.5
 #     r2 = (env.theta_threshold_radians - abs(theta)) / env.theta_threshold_radians - 0.5
@@ -222,12 +276,14 @@ class DQN():
 
 def main():
     dqn = DQN()
-    episodes = 40000
+    episodes = EPISODES
     print("Collecting Experience....")
     reward_list = []
     # plt.ion()
     # fig, ax = plt.subplots()
     for i in range(episodes):
+        if (i+1) % (episodes // 10) == 0:
+            dqn.save(setting_name+'_'+str(i)+'.pkl')
         state = env.reset()
         ep_reward = 0
         while True:
@@ -245,8 +301,18 @@ def main():
                 if done:
                     print("episode: {} , the episode reward is {}".format(i, round(ep_reward, 3)), env.get_board().flatten())
                     writer.add_scalar(setting_name+'Reward/Episodes reward', ep_reward, global_step=i)
-                    writer.add_scalar(setting_name+'Reward/Score', env.get_score(), global_step=i)
+                    # writer.add_scalar(setting_name+'Reward/Score', env.get_score(), global_step=i)
                     writer.add_scalar(setting_name+'Reward/Max tile', np.log2(env.get_board().max()), global_step=i)
+                    if i % 400 == 0:
+                        scores = 0
+                        maxtile = 0
+                        for i in range(3):
+                            score, board = dqn.greedy_eval(env)
+                            scores += score
+                            maxtile = max(maxtile, board)
+                        writer.add_scalar(setting_name+'Greedy Eval/Score', scores/3, global_step=i)
+                        writer.add_scalar(setting_name+'Greedy Eval/Max tile', maxtile, global_step=i)
+
             if done:
                 break
             state = next_state
