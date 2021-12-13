@@ -199,6 +199,14 @@ class DQN():
     def save(self, path):
         torch.save(self.eval_net.state_dict(), path)
 
+    def load(self, path):
+        maploc = lambda storage, loc: storage
+        if use_cuda:
+            maploc = lambda storage, loc: storage.cuda()
+        obj = torch.load(path, maploc)
+        self.eval_net.load_state_dict(obj)
+        self.target_net.load_state_dict(obj)
+
     def choose_action(self, state, greedy=False):
         state = torch.unsqueeze(torch.FloatTensor(state), 0) # get a 1D array
         if use_cuda:
