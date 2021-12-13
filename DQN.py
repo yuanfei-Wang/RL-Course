@@ -203,7 +203,7 @@ class DQN():
         maploc = lambda storage, loc: storage
         if use_cuda:
             maploc = lambda storage, loc: storage.cuda()
-        obj = torch.load(path, maploc)
+        obj = torch.load(path, map_location=maploc)
         self.eval_net.load_state_dict(obj)
         self.target_net.load_state_dict(obj)
 
