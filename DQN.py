@@ -12,9 +12,9 @@ import os
 # hyper-parameters
 BATCH_SIZE = 1024 # 128 originally
 LR = 0.001 # 0.001 originally
-GAMMA = 0.99 # 0.9 originally
+GAMMA = 0.8 # 0.9 originally
 EPISILO = 0.9
-MEMORY_CAPACITY = 20000 # 2e+5 originally
+MEMORY_CAPACITY = 200000 # 2e+5 originally
 Q_NETWORK_ITERATION = 100
 EPISODES = 40000 # 4e+4 originally
 
@@ -25,7 +25,7 @@ torch.cuda.set_device(1)
 
 # env = gym.make("CartPole-v0")
 # setting_name = ''
-setting_name = 'CNNNet-mem2w-gamma0.99'
+setting_name = 'CNNNet-gamma0.8'
 env = gym.make("Env2048onehot-v0")
 env = env.unwrapped
 writer = SummaryWriter('DQN_log/onehot/')
@@ -306,12 +306,12 @@ def main():
                     if i % 400 == 0:
                         scores = 0
                         maxtile = 0
-                        for i in range(3):
+                        for _ in range(3):
                             score, board = dqn.greedy_eval(env)
                             scores += score
                             maxtile = max(maxtile, board)
-                        writer.add_scalar(setting_name+'Greedy Eval/Score', scores/3, global_step=i)
-                        writer.add_scalar(setting_name+'Greedy Eval/Max tile', maxtile, global_step=i)
+                        writer.add_scalar(setting_name+'Reward/Greedy Score', scores/3, global_step=i)
+                        writer.add_scalar(setting_name+'Reward/Greedy Max tile', maxtile, global_step=i)
 
             if done:
                 break
