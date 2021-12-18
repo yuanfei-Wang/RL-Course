@@ -12,20 +12,22 @@ import os
 # hyper-parameters
 BATCH_SIZE = 1024 # 128 originally
 LR = 0.001 # 0.001 originally
-GAMMA = 0.8 # 0.9 originally
-EPISILO = 0.9
+GAMMA = 1 # 0.9 originally
+EPISILO = 0.5 # 0.9 originally
 MEMORY_CAPACITY = 200000 # 2e+5 originally
 Q_NETWORK_ITERATION = 100
-EPISODES = 40000 # 4e+4 originally
+EPISODES = 150000 # 4e+4 originally
+# LOAD_PATH = 'CNNNet-gamma1_39999.pkl' # None originally
+LOAD_PATH = None
 
 use_cuda = torch.cuda.is_available()
 # use_cuda = False
 
-torch.cuda.set_device(1)
+torch.cuda.set_device(2)
 
 # env = gym.make("CartPole-v0")
 # setting_name = ''
-setting_name = 'CNNNet-gamma0.8'
+setting_name = 'CNNNet-bsz1024-gamma1-epsd15w-epsl0.5to1after3w'
 env = gym.make("Env2048onehot-v0")
 env = env.unwrapped
 writer = SummaryWriter('DQN_log/onehot/')
@@ -40,6 +42,7 @@ print('gamma', GAMMA)
 print('eps', EPISILO)
 print('mem cap', MEMORY_CAPACITY)
 print('q net iter', Q_NETWORK_ITERATION)
+print('LOAD_PATH', LOAD_PATH)
 
 class Net(nn.Module):
     """docstring for Net"""
@@ -97,6 +100,29 @@ class CNNNet(nn.Module):
         x = x.view(-1, 4, 4, 18)
         x = self.fc1(x)
         x = F.relu(x)
+        x = x.permute(0, 3, 1, 2)
+        x = self.conv(x).permute(0,2,3,1).view(-1, 16*64)
+        x = F.relu(x)
+        x = self.fc2(x)
+        x = F.relu(x)
+        action_prob = self.out(x)
+        return action_prob.softmax(dim=-1)
+
+class CNNNet_NoFirstRelu(nn.Module):
+    """docstring for Net"""
+    def __init__(self):
+        super(CNNNet_NoFirstRelu, self).__init__()
+        self.fc1 = nn.Linear(18, 64)
+        self.fc1.weight.data.normal_(0,0.1)
+        self.conv = nn.Conv2d(64,64,3,padding=(1,1))
+        self.fc2 = nn.Linear(16*64, 64)
+        self.fc2.weight.data.normal_(0,0.1)
+        self.out = nn.Linear(64,NUM_ACTIONS)
+        self.out.weight.data.normal_(0,0.1)
+
+    def forward(self,x):
+        x = x.view(-1, 4, 4, 18)
+        x = self.fc1(x)
         x = x.permute(0, 3, 1, 2)
         x = self.conv(x).permute(0,2,3,1).view(-1, 16*64)
         x = F.relu(x)
@@ -273,6 +299,7 @@ class DQN():
             # np.sum(np.abs(next_board - self.board)) == 0
             if done or np.sum(np.abs(next_state - state)) == 0:
                 # print('\n')
+                print('greedy', env.get_score(), env.get_board())
                 return env.get_score(), np.log2(env.get_board().max())
             state = next_state
 
@@ -284,12 +311,17 @@ class DQN():
 
 def main():
     dqn = DQN()
+    if LOAD_PATH != None:
+        dqn.load(LOAD_PATH)
     episodes = EPISODES
     print("Collecting Experience....")
     reward_list = []
     # plt.ion()
     # fig, ax = plt.subplots()
     for i in range(episodes):
+        if i == 30000:
+            global EPISILO
+            EPISILO = 1
         if (i+1) % (episodes // 10) == 0:
             dqn.save(setting_name+'_'+str(i)+'.pkl')
         state = env.reset()
