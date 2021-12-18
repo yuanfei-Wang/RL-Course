@@ -49,7 +49,7 @@ def main(seed=0, gamma=0.99, c=100, iter_time=1, d=10, render=True):
         obs = obs_new
     
     print('#' * 70)
-    print('game done, final score: {}\n\n'.format(env.score))
+    print('game done, final score: {}\n\n'.format(env.get_score()))
 
     # remember to close the env, but you can always let resources leak on your own computer :|
     env.close()
